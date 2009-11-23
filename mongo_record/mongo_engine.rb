@@ -58,6 +58,14 @@ class MongoEngine
     
     db.collection(collection).update(original, modified)
   end
+  
+  def delete(command)
+    collection = command.relation.name
+    key = command.relation.predicate.operand1.name
+    value = command.relation.predicate.operand2.value
+    db.collection(collection).remove(key => value)
+  end
+  
 end
 
 def log(msg)
@@ -79,7 +87,7 @@ if __FILE__ == $PROGRAM_NAME
   
   p table.first
   
-  # table[author_id].update({:name => 'Adam Keys'})
+  table.where(table[:name].eq('Adam Keys')).delete
   
-  # author = table[:_id].eq(author_id).first
+  p table.first
 end
