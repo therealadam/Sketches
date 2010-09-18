@@ -57,6 +57,49 @@ module Scales
     
   end
   
+  module Counter
+    extend ActiveSupport::Concern
+    
+    included do
+      
+      cattr_accessor(:_counters) { [] } # I dislike _underscore members
+      
+      def self.counter(name)
+        _counters << name
+      end
+      
+      def self.incr(key, identifier, count=1)
+        validate_key(key)
+        
+        Scales.memcache.increment(counter_for(key, identifier), count)
+      rescue Memcached::NotFound
+        Scales.memcache.set(counter_for(key, identifier), count, 0, false)
+      end
+
+      def self.decr(key, identifier, count=-1)
+        validate_key(key)
+        
+        Scales.memcache.decrement(counter_for(key, identifier), count)
+      rescue Memcached::NotFound
+        Scales.memcache.set(counter_for(key, identifier), count, 0, false)
+      end
+      
+      def self.counter_for(key, identifier)
+        [self.name, key, identifier].join(":")
+      end
+      
+      def self.counters(key, identifier)
+        validate_key(key)
+        
+        Scales.memcache.get(counter_for(key, identifier), false)
+      end
+      
+      def self.validate_key(key)
+        raise "Unknown key: #{key}" unless _counters.include?(key)
+      end
+      
+    end
+  end
 end
 
 require "active_record"
@@ -78,9 +121,12 @@ class User < ActiveRecord::Base
   validates_presence_of :username
   
   include Scales::Cache
+  include Scales::Counter
   
   cache_by :id
   cache_by :username
+  
+  counter :profile_views
   
 end
 
@@ -99,3 +145,11 @@ begin
 rescue Memcached::NotFound
   puts "Destroy worked"
 end
+
+egon = User.get(:username, "egon")
+User.incr(:profile_views, egon.id)
+User.incr(:profile_views, egon.id, 10)
+p User.counters(:profile_views, egon.id)
+User.decr(:profile_views, egon.id)
+User.decr(:profile_views, egon.id, 10)
+p User.counters(:profile_views, egon.id)
