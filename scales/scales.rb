@@ -29,9 +29,10 @@ module Scales
       
       cattr_accessor(:caches) { [] } # Less ugly way to do this?
       
+      # TODO: Only add these if the class is a descendent of AR::Base
       after_create :save_to_cache
-      after_update :update_cache # TODO
-      after_destroy :delete_from_cache # TODO
+      after_update :update_cache
+      after_destroy :delete_from_cache
     end
     
     protected
@@ -39,6 +40,18 @@ module Scales
     def save_to_cache
       self.class.caches.each do |key|
         Scales.memcache.set(self.class.key_for(self.send(key), key), self)
+      end
+    end
+    
+    def update_cache
+      self.class.caches.each do |key|
+        Scales.memcache.set(self.class.key_for(self.send(key), key), self)
+      end
+    end
+    
+    def delete_from_cache
+      self.class.caches.each do |key|
+        Scales.memcache.delete(self.class.key_for(self.send(key), key))
       end
     end
     
@@ -76,5 +89,13 @@ Scales.memcache.flush
 
 users = %w{peter ray egon winston}.map { |u| User.create(:username => u ) }
 
-p User.get(:id, 2)
-p User.get(:username, "peter")
+p User.get(:id, 1)
+p User.get(:username, "ray")
+
+User.first.destroy
+begin
+  User.get(:id, 1)
+  puts "Destroy didn't work"
+rescue Memcached::NotFound
+  puts "Destroy worked"
+end
